@@ -46,3 +46,15 @@ jobs:
         run: docker build -t sijomt/python_project  .
       - name: Publish Image to docker hub
         run: docker push sijomt/python_project:latest
+
+  deploy:
+    name: Deploying Docker image
+    needs: build
+    runs-on: self-hosted 
+    steps:
+      - name: Pull image from docker hub
+        run: docker pull sijomt/python_project:latest
+      - name: Delete old container
+        run: docker rm -f flask-app
+      - name: Run Docker Compose
+        run: docker-compose -f docker.yml up -d 
