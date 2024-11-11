@@ -12,13 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
       - uses: sonarsource/sonarqube-scan-action@v3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      # If you wish to fail your job when the Quality Gate is red, uncomment the
-      # following lines. This would typically be used to fail a deployment.
+      # Uncomment the following lines if you want to fail the job based on Quality Gate status
       # - uses: sonarsource/sonarqube-quality-gate-action@master
       #   timeout-minutes: 5
       #   env:
@@ -29,9 +28,14 @@ jobs:
     needs: Analysis
     runs-on: self-hosted
     steps:
-      - name: Trivy Scan
+      - name: Checkout Source
+        uses: actions/checkout@v4
+      - name: Trivy Config Scan
         run: |
           trivy config --severity HIGH,CRITICAL Dockerfile
+      - name: Trivy Image Scan
+        run: |
+          trivy image --severity HIGH,CRITICAL --format table sijomt/python_project:latest
 
   build:
     name: Build Image and Push to DockerHub
@@ -40,28 +44,28 @@ jobs:
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
-      - name: Login to docker hub
-        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}     
+      - name: Login to Docker Hub
+        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
       - name: Build Docker Image
-        run: docker build -t sijomt/python_project  .
-      - name: Publish Image to docker hub
+        run: docker build -t sijomt/python_project:latest .
+      - name: Publish Image to Docker Hub
         run: docker push sijomt/python_project:latest
 
   deploy:
-    name: Deploying Docker image
+    name: Deploy Docker Image
     needs: build
-    runs-on: self-hosted 
+    runs-on: self-hosted
     steps:
       - name: Down Docker Compose
         run: docker-compose -f docker.yml down
-      - name: Delete old container
-        run: docker rm -f flask-app
-      - name: Delete old image
-        run: docker rmi sijomt/python_project:latest
-      - name: Pull image from docker hub
+      - name: Delete Old Container
+        run: docker rm -f flask-app || true  # Prevents errors if the container does not exist
+      - name: Delete Old Image
+        run: docker rmi sijomt/python_project:latest || true  # Prevents errors if the image does not exist
+      - name: Pull Latest Image from Docker Hub
         run: docker pull sijomt/python_project:latest
-      - name: Trivy scanning on docker image
-        run: trivy image --format table -o trivy-image-report.html sijomt/python_project:latest
+      - name: Trivy Image Scan
+        run: trivy image --severity HIGH,CRITICAL --format table -o trivy-image-report.html sijomt/python_project:latest
       - name: Run Docker Compose
         run: docker-compose -f docker.yml up -d
 
@@ -74,16 +78,16 @@ jobs:
         run: |
           echo "Waiting for flask-app container to be healthy..."
           for i in {1..10}; do
-          # Using curl to check if the /health endpoint returns a 200 status code
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000 || echo "000")
-          
-          if [ "$response" -eq 200 ]; then
-            echo "Health check passed! Container is healthy."
-            exit 0
-          else
-            echo "Health check failed with status code: $response. Retrying in 5 seconds..."
-            sleep 5
-          fi
+            # Using curl to check if the /health endpoint returns a 200 status code
+            response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000 || echo "000")
+            
+            if [ "$response" -eq 200 ]; then
+              echo "Health check passed! Container is healthy."
+              exit 0
+            else
+              echo "Health check failed with status code: $response. Retrying in 5 seconds..."
+              sleep 5
+            fi
           done
           echo "Health check did not pass after 10 attempts."
           exit 1
