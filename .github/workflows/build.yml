@@ -74,16 +74,16 @@ jobs:
         run: |
           echo "Waiting for flask-app container to be healthy..."
           for i in {1..10}; do
-            status=$(docker inspect --format='{{.State.Health.Status}}' flask-app 2>/dev/null || echo "unavailable")
-            if [ "$status" == "healthy" ]; then
-              echo "Container is healthy!"
-              exit 0
-            elif [ "$status" == "unhealthy" ]; then
-              echo "Container is unhealthy. Exiting..."
-              exit 1
-            fi
-            echo "Container status: $status. Retrying in 5 seconds..."
+          # Using curl to check if the /health endpoint returns a 200 status code
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000 || echo "000")
+          
+          if [ "$response" -eq 200 ]; then
+            echo "Health check passed! Container is healthy."
+            exit 0
+          else
+            echo "Health check failed with status code: $response. Retrying in 5 seconds..."
             sleep 5
+          fi
           done
-          echo "Container did not become healthy after 10 attempts."
+          echo "Health check did not pass after 10 attempts."
           exit 1
