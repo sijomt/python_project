@@ -61,6 +61,6 @@ jobs:
       - name: Pull image from docker hub
         run: docker pull sijomt/python_project:latest
       - name: Trivy scanning on docker image
-        run : trivy image --format table -o trivy-image-report.html sijomt/python_project:latest
+        run: trivy image --exit-code 1 --severity CRITICAL --format table -o trivy-image-report.html sijomt/python_project:latest
       - name: Run Docker Compose
         run: docker-compose -f docker.yml up -d 
