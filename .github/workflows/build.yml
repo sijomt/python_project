@@ -74,12 +74,15 @@ jobs:
         run: |
           echo "Waiting for flask-app container to be healthy..."
           for i in {1..10}; do
-            status=$(docker inspect --format='{{.State.Health.Status}}' flask-app)
+            status=$(docker inspect --format='{{.State.Health.Status}}' flask-app 2>/dev/null || echo "unavailable")
             if [ "$status" == "healthy" ]; then
               echo "Container is healthy!"
               exit 0
+            elif [ "$status" == "unhealthy" ]; then
+              echo "Container is unhealthy. Exiting..."
+              exit 1
             fi
-            echo "Container is not healthy yet, retrying in 5 seconds..."
+            echo "Container status: $status. Retrying in 5 seconds..."
             sleep 5
           done
           echo "Container did not become healthy after 10 attempts."
